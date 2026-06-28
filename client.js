@@ -146,6 +146,11 @@ function render() {
     els.challengeMatchBtn.classList.toggle("active", matchType === "challenge");
     
     let availableStudents = Object.values(state.students).filter(s => !s.absent);
+    if(matchType === "normal"){
+      availableStudents = availableStudents.filter(s => s.status === "normal");
+    } else if(matchType === "challenge"){
+      availableStudents = availableStudents.filter(s => s.status === "king" || s.status === "challenger");
+    }
     availableStudents.sort((a,b) => a.name.localeCompare(b.name, "ko"));
 
     els.playerGrid.replaceChildren();
