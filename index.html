@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>왕좌 도전 - 시작하기</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: "Pretendard", "Noto Sans KR", sans-serif;
+      background: linear-gradient(135deg, #f7fbff 0%, #f3f6ff 48%, #fff8e5 100%);
+      color: #172033;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.9);
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 16px 40px rgba(31, 45, 75, 0.16);
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 32px;
+      color: #00a9a5;
+    }
+    p {
+      color: #667085;
+      margin-bottom: 30px;
+      font-weight: bold;
+    }
+    .link-btn {
+      display: block;
+      margin-bottom: 16px;
+      padding: 16px;
+      border-radius: 12px;
+      text-decoration: none;
+      font-size: 18px;
+      font-weight: 900;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .link-btn:active {
+      transform: scale(0.98);
+    }
+    .host-btn {
+      background: #172033;
+      color: #fff;
+      box-shadow: 0 8px 16px rgba(23, 32, 51, 0.2);
+    }
+    .client-btn {
+      background: #00a9a5;
+      color: #fff;
+      box-shadow: 0 8px 16px rgba(0, 169, 165, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>👑 왕좌 도전</h1>
+    <p>접속할 화면을 선택해 주세요.</p>
+    
+    <a href="./host.html?room=class-3-2" class="link-btn host-btn">교사용 전광판 화면</a>
+    <a href="./client.html?room=class-3-2" class="link-btn client-btn">학생용 대결 화면</a>
+  </div>
+</body>
+</html>
