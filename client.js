@@ -264,6 +264,27 @@ els.backToPlayerBtn.onclick = () => { currentStep = "player-select"; playSound("
 els.playerABtn.onclick = () => handleMatchResult(selectedPlayers[0].id);
 els.playerBBtn.onclick = () => handleMatchResult(selectedPlayers[1].id);
 
+function normalizeState(value){
+  const source = value || {};
+  return {
+    settings: Object.assign(
+      { roomName: "왕좌 도전", games: [], kingLimit: 3, perfectScore: 0, sheetUrl: "", status: "playing", allowDuplicateGames: true, updatedAt: 0 },
+      source.settings || {}
+    ),
+    students: source.students || {}
+  };
+}
+
+function isRoomReady(value){
+  return !!(value && value.settings && Array.isArray(value.settings.games) && value.settings.games.length > 0);
+}
+
+function showWaitingOverlay(){
+  const message = els.loadingOverlay.querySelector("p");
+  if(message) message.textContent = "선생님이 방을 준비하는 중입니다...";
+  els.loadingOverlay.classList.add("active");
+}
+
 async function setupFirebase(){
   if(!firebaseConfig.apiKey || !firebaseConfig.databaseURL) return false;
   const app = initializeApp(firebaseConfig);
@@ -272,7 +293,9 @@ async function setupFirebase(){
   databaseRef = ref(database, "rooms/" + roomId);
   unsubscribe = onValue(databaseRef, snapshot => {
     const value = snapshot.val();
-    if(value){ state = value; render(); }
+    state = normalizeState(value);
+    if(!isRoomReady(value)){ showWaitingOverlay(); return; }
+    render();
   });
   return true;
 }
@@ -283,7 +306,8 @@ function loadLocalState(){
     if(saved) {
       const parsed = JSON.parse(saved);
       if(!state || state.settings.updatedAt !== parsed.settings.updatedAt) {
-        state = parsed;
+        state = normalizeState(parsed);
+        if(!isRoomReady(parsed)){ showWaitingOverlay(); return; }
         render();
       }
     }
