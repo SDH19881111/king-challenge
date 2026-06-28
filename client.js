@@ -217,6 +217,7 @@ async function handleMatchResult(winnerId) {
   const loserId = selectedPlayers.find(p => p.id !== winnerId).id;
   const loser = state.students[loserId];
   const totalGamesCount = state.settings.games.length;
+  let repeatWin = false;
 
   if (matchType === "challenge") {
     if (winner.status === "king") {
@@ -228,15 +229,19 @@ async function handleMatchResult(winnerId) {
     }
   } else {
     const allowDup = state.settings.allowDuplicateGames ?? true;
+    let gainPoints = 2;
     if (!allowDup) {
-      if (winner.playedGames && winner.playedGames.includes(selectedGame.id)) {
-        alert(winner.name + " 학생은 이미 '" + selectedGame.name + "' 종목에서 승리한 적이 있습니다.\n중복 승리가 금지되어 있어 점수를 얻을 수 없습니다.");
-        return;
-      }
       winner.playedGames = winner.playedGames || [];
-      winner.playedGames.push(selectedGame.id);
+      if (winner.playedGames.includes(selectedGame.id)) {
+        // 이미 이긴 종목 재승리: 차단하지 않고 절반 점수(+1)만 부여.
+        // 진 학생도 점수를 계속 모아 도전자로 올라갈 수 있게 하기 위함.
+        gainPoints = 1;
+        repeatWin = true;
+      } else {
+        winner.playedGames.push(selectedGame.id);
+      }
     }
-    winner.score += 2;
+    winner.score += gainPoints;
     loser.score = Math.max(0, loser.score - 1);
     if (winner.score >= state.settings.perfectScore && !winner.reachedPerfectAt) {
       winner.reachedPerfectAt = Date.now();
@@ -249,7 +254,7 @@ async function handleMatchResult(winnerId) {
   await saveState();
   playSound("win");
   
-  alert(`${winner.name} 학생의 승리가 기록되었습니다!`);
+  alert(`${winner.name} 학생의 승리가 기록되었습니다!` + (repeatWin ? `\n(이미 이긴 '${selectedGame.name}' 종목이라 1점만 올라갔어요.)` : ""));
   currentStep = "game-select";
   selectedPlayers = [];
   render();
