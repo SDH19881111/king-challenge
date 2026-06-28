@@ -258,8 +258,10 @@ els.playerBBtn.onclick = () => handleMatchResult(selectedPlayers[1].id);
 
 async function setupFirebase(){
   if(!firebaseConfig.apiKey || !firebaseConfig.databaseURL) return false;
-  const appModule = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js");
-  const databaseModule = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js");
+  const [appModule, databaseModule] = await Promise.all([
+    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js")
+  ]);
   const app = appModule.initializeApp(firebaseConfig);
   const database = databaseModule.getDatabase(app);
   databaseApi = databaseModule;
