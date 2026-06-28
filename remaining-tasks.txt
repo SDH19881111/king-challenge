@@ -1,0 +1,391 @@
+왕좌 도전 웹 게임 이어서 개발 작업 정리
+작성일: 2026-06-28
+
+1. 현재까지 만들어진 파일
+
+- outputs/host.html
+  교사용 화면 HTML입니다.
+
+- outputs/host.css
+  교사용 화면 스타일입니다.
+
+- outputs/host.js
+  교사용 화면 동작 로직입니다.
+
+현재 교사용 화면은 다음 기능을 포함합니다.
+
+- 전광판 탭과 교사 설정 탭 분리
+- 화면 크기에 맞춰 꽉 차는 전광판 레이아웃
+- 게임 종목 입력
+- 왕의 자리 수 입력
+- 만점 자동 계산: 게임 종목 수 * 2점
+- 학생 직접 추가
+- 구글 Apps Script 주소 입력
+- 구글시트 명단 불러오기 버튼
+- 출석/결석 체크
+- 결석생을 전광판, 왕관 계산, 도전자 대기열에서 제외
+- 전체 초기화
+- 점수 임시 조정 버튼: +2, -1
+- 왕관 보유 학생 표시
+- 도전자 대기열 캐러셀 표시
+- Firebase 연결을 위한 설정 자리
+- Firebase 설정값이 비어 있을 때는 브라우저 로컬 저장소로 동작
+
+
+2. 전체 목표
+
+GitHub Pages에서도 동작하는 실시간 반응형 교육용 웹 게임을 완성한다.
+
+역할은 두 화면으로 나눈다.
+
+- 교사용 화면: /host.html
+- 학생용 화면: /client.html
+
+나중에 React/Vite 프로젝트로 확장한다면 라우팅은 아래처럼 잡으면 좋다.
+
+- /host/:roomId
+- /client/:roomId
+
+현재는 정적 HTML/CSS/JS 방식이므로 쿼리스트링으로 방을 구분한다.
+
+예:
+- host.html?room=class-3-2
+- client.html?room=class-3-2
+
+
+3. Firebase 연결 작업
+
+현재 host.js 안에 firebaseConfig 자리가 있다.
+
+해야 할 일:
+
+1. Firebase 프로젝트 생성
+2. Realtime Database 생성
+3. 웹 앱 등록
+4. firebaseConfig 값 채우기
+5. Realtime Database 규칙 설정
+6. 학생용 화면도 같은 rooms/{roomId} 경로를 구독하게 만들기
+
+권장 데이터 구조:
+
+rooms
+  {roomId}
+    settings
+      roomName
+      games
+      kingLimit
+      perfectScore
+      sheetUrl
+      status
+      updatedAt
+    students
+      {studentId}
+        id
+        name
+        number
+        score
+        absent
+        status
+        crownOrder
+        challengerOrder
+        reachedPerfectAt
+        updatedAt
+    matches
+      {matchId}
+        id
+        type
+        gameId
+        gameName
+        playerAId
+        playerAName
+        playerBId
+        playerBName
+        challengerId
+        kingId
+        winnerId
+        loserId
+        createdAt
+        resolvedAt
+    events
+      {eventId}
+        type
+        message
+        studentId
+        createdAt
+
+학생 status 값:
+
+- normal: 일반 학생
+- king: 왕관 보유 학생
+- challenger: 도전자 대기 학생
+
+
+4. 구글시트 Apps Script 연결 작업
+
+교사용 설정 탭에는 Apps Script 주소 입력칸이 이미 있다.
+
+host.js의 명단 불러오기 로직은 다음 JSON 형식을 지원한다.
+
+형식 1:
+
+[
+  "민준",
+  "서연",
+  "지후"
+]
+
+형식 2:
+
+{
+  "students": [
+    { "name": "민준" },
+    { "name": "서연" },
+    { "name": "지후" }
+  ]
+}
+
+형식 3:
+
+{
+  "students": [
+    { "이름": "민준" },
+    { "이름": "서연" },
+    { "이름": "지후" }
+  ]
+}
+
+Apps Script에서 CORS 문제가 생기면 doGet 함수가 JSON을 ContentService로 반환하도록 한다.
+
+예시:
+
+function doGet() {
+  const sheet = SpreadsheetApp.getActive().getSheetByName("명단");
+  const values = sheet.getDataRange().getValues();
+  const headers = values.shift();
+  const nameIndex = headers.indexOf("이름");
+  const students = values
+    .map(row => ({ name: row[nameIndex] }))
+    .filter(student => student.name);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ students }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+추가하면 좋은 것:
+
+- 번호 컬럼 지원
+- 학급 컬럼 지원
+- 결석 컬럼을 구글시트에서 읽어 초기 absent 값으로 반영
+
+
+5. 학생용 화면에서 만들어야 할 기능
+
+새로 만들 파일:
+
+- outputs/client.html
+- outputs/client.css
+- outputs/client.js
+
+학생용 화면의 주요 흐름:
+
+1. Firebase 또는 로컬 저장소에서 방 데이터 읽기
+2. 교사가 설정한 게임 종목 버튼 표시
+3. 종목 선택
+4. 출석 중인 학생 카드 목록 표시
+5. 대결할 학생 2명 선택
+6. 화면 상단에 선택한 게임 종목 표시
+7. 화면 하단 또는 중앙에 "학생A vs 학생B" 표시
+8. 결과 입력 화면 표시
+9. 이긴 학생 이름 버튼을 누르면 점수 반영
+10. 점수 반영 후 전광판에 실시간 표시
+
+학생용 화면에는 모든 UI 텍스트를 한국어로 쓴다.
+
+추천 화면 구성:
+
+- 상단: 방 이름, 현재 단계
+- 첫 화면: 게임 종목 선택
+- 두 번째 화면: 대결자 2명 선택
+- 세 번째 화면: 결과 입력
+- 하단: 처음으로, 선택 다시 하기 버튼
+
+
+6. 학생용 일반 대결 점수 로직
+
+일반 대결:
+
+- 승리 학생: +2점
+- 패배 학생: -1점
+- 패배 학생 점수는 0점 아래로 내려가지 않음
+
+예:
+
+winner.score = winner.score + 2
+loser.score = Math.max(0, loser.score - 1)
+
+만점 도달 처리:
+
+- 만점 = 게임 종목 수 * 2점
+- 학생 점수가 만점 이상이 되면 reachedPerfectAt 기록
+- 왕 자리 수가 남아 있으면 status = king
+- 왕 자리가 꽉 찼으면 status = challenger
+- 도전자 대기열은 reachedPerfectAt 순서대로 정렬
+
+주의:
+
+- 결석생은 학생용 선택 목록에서 제외
+- 결석생은 왕관 계산에서도 제외
+
+
+7. 왕 vs 도전자 결전 로직
+
+학생용 화면에서 도전자 결전 모드를 지원해야 한다.
+
+조건:
+
+- 도전자 status가 challenger인 학생이 있어야 한다.
+- 왕 status가 king인 학생이 있어야 한다.
+
+흐름:
+
+1. 도전자가 자신 있는 게임 종목 선택
+2. 도전자가 대결할 왕 선택
+3. 결과 입력
+4. 이긴 사람을 누르면 점수와 왕관 상태 변경
+
+점수 로직:
+
+- 도전자가 패배할 경우:
+  도전자 점수 = 총 게임 종목 수
+  예: 종목 5개면 5점
+
+- 왕이 패배할 경우:
+  왕 점수 = Math.round(총 게임 종목 수 / 2)
+  예: 종목 5개면 Math.round(2.5) = 3점
+  왕은 왕관을 잃음
+  이긴 도전자는 새 왕이 됨
+
+구현 팁:
+
+- 일반 대결과 결전 대결을 match.type으로 구분한다.
+- 일반 대결: type = "normal"
+- 결전 대결: type = "challenge"
+
+왕이 패배했을 때는 단순 점수 계산 후 recalculateRanks만 호출하면 도전자가 더 늦게 만점에 도달했기 때문에 기존 왕 순서가 꼬일 수 있다.
+따라서 결전 승리 도전자를 즉시 왕으로 승격시키는 별도 함수가 필요하다.
+
+추천 함수:
+
+- resolveNormalMatch(match, winnerId)
+- resolveChallengeMatch(match, winnerId)
+- promoteChallengerToKing(challengerId, defeatedKingId)
+- recalculateRanks()
+
+
+8. 교사용 화면에 추가로 개선할 것
+
+현재 교사용 화면은 기본 동작을 갖췄지만, 다음 개선을 하면 좋다.
+
+- 설정 저장 완료 메시지를 alert 대신 화면 토스트로 표시
+- 전체 초기화 전에 한 번 더 확인 문구 강화
+- 학생 삭제 기능
+- 학생 이름 수정 기능
+- 구글시트에서 다시 불러올 때 기존 점수를 유지할지 초기화할지 선택
+- 전광판 전체화면 버튼
+- 점수 조정 버튼을 교사 설정 탭으로 이동할지 검토
+- 왕관 이미지를 실제 PNG로 교체
+- 배경 이미지를 실제 게임 배경 이미지로 교체
+
+
+9. 사운드 작업
+
+현재 host.js는 Web Audio API로 간단한 효과음을 낸다.
+
+나중에 실제 파일을 쓰려면 아래 폴더를 만든다.
+
+outputs/assets/sounds
+
+추천 파일:
+
+- click.mp3
+- win.mp3
+- lose.mp3
+- crown.mp3
+- reset.mp3
+
+예시 코드:
+
+const sounds = {
+  click: new Audio("./assets/sounds/click.mp3"),
+  win: new Audio("./assets/sounds/win.mp3"),
+  lose: new Audio("./assets/sounds/lose.mp3"),
+  crown: new Audio("./assets/sounds/crown.mp3"),
+  reset: new Audio("./assets/sounds/reset.mp3")
+};
+
+function playSound(name) {
+  const sound = sounds[name];
+  if (!sound) return;
+  sound.currentTime = 0;
+  sound.play();
+}
+
+
+10. 디자인 방향
+
+전광판:
+
+- 수업 중 큰 화면에 띄울 것을 고려
+- 큰 글씨
+- 한눈에 보이는 점수
+- 왕관 영역과 전체 점수판 영역 분리
+- 도전자 대기열은 하단에 고정 또는 화면 하단 도크 형태
+- 화면 높이에 맞춰 꽉 차게 표시
+
+교사 설정:
+
+- 입력과 관리 중심
+- 게임 종목 안내를 충분히 제공
+- 구글시트 명단 불러오기
+- 출석/결석 체크
+- 전체 초기화
+
+학생용 화면:
+
+- 태블릿 터치 사용을 고려
+- 버튼은 크게
+- 한 화면에서 해야 할 행동을 명확히
+- 학생 이름 카드는 누르기 쉽게
+- 실수 방지를 위해 결과 입력 전에 현재 대결 정보를 크게 표시
+
+
+11. 다음 작업 추천 순서
+
+1. client.html, client.css, client.js 생성
+2. 학생용 화면에서 방 데이터 읽기
+3. 게임 종목 선택 UI 만들기
+4. 출석 중인 학생 카드 목록 표시
+5. 대결자 2명 선택 로직 만들기
+6. 일반 대결 결과 입력 로직 만들기
+7. 교사용 전광판과 실시간 동기화 확인
+8. 도전자 결전 모드 만들기
+9. Firebase 설정값 채우기
+10. GitHub Pages 배포 구조 정리
+11. 실제 구글 Apps Script 주소 연결
+12. 모바일/태블릿/대형 화면에서 반응형 확인
+
+
+12. 현재 파일 위치
+
+작업 폴더:
+C:\Users\소율애미애비\Documents\Codex\2026-06-28\html-css-js-react-github-pages
+
+결과물 폴더:
+C:\Users\소율애미애비\Documents\Codex\2026-06-28\html-css-js-react-github-pages\outputs
+
+교사용 화면:
+C:\Users\소율애미애비\Documents\Codex\2026-06-28\html-css-js-react-github-pages\outputs\host.html
+
+이 문서:
+C:\Users\소율애미애비\Documents\Codex\2026-06-28\html-css-js-react-github-pages\outputs\remaining-tasks.txt

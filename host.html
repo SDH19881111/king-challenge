@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>왕좌 도전 교사용 화면</title>
+    <link rel="stylesheet" href="./host.css" />
+  </head>
+  <body>
+    <main class="host-app">
+      <header class="host-header">
+        <div class="brand-block">
+          <p class="eyebrow">교사용 화면</p>
+          <h1>왕좌 도전</h1>
+        </div>
+        <nav class="view-tabs" aria-label="화면 선택">
+          <button id="boardTabButton" class="tab-button active" type="button" data-view="board">전광판</button>
+          <button id="settingsTabButton" class="tab-button" type="button" data-view="settings">교사 설정</button>
+        </nav>
+        <div class="room-chip"><span>방 이름</span><strong id="roomLabel">class-3-2</strong></div>
+      </header>
+
+      <section id="boardView" class="view-panel board-view active" aria-label="전광판 화면">
+        <section class="hero-score">
+          <div>
+            <p class="eyebrow dark">실시간 순위</p>
+            <h2 id="boardTitle">왕좌 전광판</h2>
+          </div>
+          <div class="score-stats">
+            <div><span>참여</span><strong id="activeCountLabel">0명</strong></div>
+            <div><span>왕관</span><strong id="kingCountLabel">0명</strong></div>
+            <div><span>만점</span><strong id="boardPerfectScoreLabel">0점</strong></div>
+          </div>
+        </section>
+
+        <section class="board-grid">
+          <aside class="kings-stage" aria-label="왕관 보유 학생">
+            <div class="section-title"><h3>왕관 보유</h3><p id="kingLimitLabel">0자리</p></div>
+            <div id="kingList" class="king-list"></div>
+          </aside>
+
+          <section class="score-stage" aria-label="학생 점수판">
+            <div class="section-title"><h3>학생 점수판</h3><p id="studentCountLabel">0명</p></div>
+            <div id="scoreBoard" class="score-board"></div>
+          </section>
+        </section>
+
+        <footer class="challenger-dock" aria-label="도전자 대기열">
+          <div class="dock-title"><span>도전자 대기열</span><strong id="challengerCountLabel">0명</strong></div>
+          <div id="challengerCarousel" class="challenger-carousel"></div>
+        </footer>
+      </section>
+
+      <section id="settingsView" class="view-panel settings-view" aria-label="교사 설정 화면">
+        <div class="settings-grid">
+          <section class="settings-card wide">
+            <div class="section-title"><h3>게임 설정</h3><p>한 줄에 한 종목씩 입력</p></div>
+            <label class="field">
+              <span>게임 종목</span>
+              <textarea id="gamesInput" rows="7" placeholder="가위바위보&#10;수학 퀴즈&#10;낱말 맞히기"></textarea>
+            </label>
+            <div class="guide-box">
+              <strong>입력 방법</strong>
+              <p>게임 종목은 한 줄에 하나씩 적어 주세요. 빈 줄은 자동으로 제외됩니다.</p>
+              <p>예: 첫째 줄 가위바위보, 둘째 줄 수학 퀴즈, 셋째 줄 낱말 맞히기</p>
+              <p>만점은 종목 수 × 2점으로 계산됩니다. 종목이 5개라면 만점은 10점입니다.</p>
+            </div>
+            <div class="setting-row">
+              <label class="field compact-field"><span>왕의 자리 수</span><input id="kingLimitInput" type="number" min="1" max="20" value="3" /></label>
+              <div class="setting-summary"><span>자동 만점</span><strong id="perfectScoreLabel">0점</strong></div>
+            </div>
+            <div class="button-row">
+              <button id="saveSettingsButton" class="primary-button" type="button">설정 저장</button>
+              <button id="resetButton" class="danger-button" type="button">전체 초기화</button>
+            </div>
+          </section>
+
+          <section class="settings-card">
+            <div class="section-title"><h3>구글시트 명단</h3><p>Apps Script 연결</p></div>
+            <label class="field">
+              <span>Apps Script 주소</span>
+              <input id="sheetUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <div class="guide-box small">
+              <p>Apps Script에서 학생 명단을 JSON으로 반환하면 됩니다.</p>
+              <p>지원 형식: 이름 배열 또는 students 배열</p>
+            </div>
+            <div class="button-row stacked">
+              <button id="loadSheetButton" class="secondary-button" type="button">명단 불러오기</button>
+              <button id="saveSheetUrlButton" class="light-button" type="button">주소 저장</button>
+            </div>
+          </section>
+
+          <section class="settings-card">
+            <div class="section-title"><h3>직접 학생 추가</h3><p>수동 등록</p></div>
+            <form id="studentForm" class="student-form">
+              <label class="field"><span>학생 이름</span><input id="studentNameInput" type="text" autocomplete="off" placeholder="예: 민준" /></label>
+              <button class="secondary-button" type="submit">학생 추가</button>
+            </form>
+          </section>
+
+          <section class="settings-card wide">
+            <div class="section-title"><h3>출석 확인</h3><p>결석생은 전광판과 왕관 계산에서 제외</p></div>
+            <div id="attendanceList" class="attendance-list"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <template id="emptyTemplate"><div class="empty-state">아직 표시할 학생이 없습니다.</div></template>
+    <script type="module" src="./host.js"></script>
+  </body>
+</html>

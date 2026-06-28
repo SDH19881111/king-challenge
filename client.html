@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>왕좌 도전 학생용 화면</title>
+    <link rel="stylesheet" href="./client.css" />
+  </head>
+  <body>
+    <main class="client-app">
+      <header class="client-header">
+        <div class="header-content">
+          <p class="room-info">방 이름: <strong id="roomLabel">...</strong></p>
+          <h1 id="stepTitle">종목 선택</h1>
+        </div>
+      </header>
+
+      <!-- Step 1: Game Select -->
+      <section id="gameSelectView" class="view-panel active">
+        <p class="guide-text">대결할 게임 종목을 선택하세요.</p>
+        <div id="gameGrid" class="button-grid"></div>
+      </section>
+
+      <!-- Step 2: Player Select -->
+      <section id="playerSelectView" class="view-panel">
+        <div class="match-type-toggle">
+          <button id="normalMatchBtn" class="toggle-btn active">일반 대결</button>
+          <button id="challengeMatchBtn" class="toggle-btn">도전자 결전</button>
+        </div>
+        <p id="playerSelectGuide" class="guide-text">대결할 학생 2명을 선택하세요.</p>
+        <div id="playerGrid" class="player-grid"></div>
+        <div class="bottom-actions">
+           <button id="backToGameBtn" class="secondary-button">이전으로</button>
+           <button id="nextToResultBtn" class="primary-button" disabled>다음 단계로</button>
+        </div>
+      </section>
+
+      <!-- Step 3: Result Input -->
+      <section id="resultInputView" class="view-panel">
+        <div class="match-info">
+          <span class="eyebrow" id="resultGameName">종목 이름</span>
+          <h2>누가 이겼나요?</h2>
+        </div>
+        <div class="vs-board">
+          <button id="playerABtn" class="vs-card">
+            <span class="status-badge" id="playerAStatus">일반</span>
+            <strong id="playerAName">학생A</strong>
+            <span class="action-text">승리 선택</span>
+          </button>
+          <div class="vs-divider">VS</div>
+          <button id="playerBBtn" class="vs-card">
+            <span class="status-badge" id="playerBStatus">일반</span>
+            <strong id="playerBName">학생B</strong>
+            <span class="action-text">승리 선택</span>
+          </button>
+        </div>
+        <div class="bottom-actions">
+           <button id="backToPlayerBtn" class="secondary-button">다시 선택하기</button>
+        </div>
+      </section>
+      
+      <!-- Overlay -->
+      <div id="loadingOverlay" class="loading-overlay active">
+        <div class="spinner"></div>
+        <p>방 정보를 불러오는 중...</p>
+      </div>
+    </main>
+
+    <script type="module" src="./client.js"></script>
+  </body>
+</html>

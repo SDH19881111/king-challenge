@@ -1,0 +1,347 @@
+// =====================================
+// 서버 스크립트 V23 (휴지통 및 15일 자동 삭제 로직 추가)
+// =====================================
+
+// 공통: 프라이빗 데이터 불러오기
+function getPrivateData(ss) {
+  var sheetPrivate = ss.getSheetByName('프라이빗');
+  if (!sheetPrivate) {
+    sheetPrivate = ss.insertSheet('프라이빗');
+    sheetPrivate.hideSheet(); 
+    sheetPrivate.getRange("A1:B1").setValues([['PRIVATE_DATA', JSON.stringify({ pin: "", lastModified: 0 })]]);
+  }
+  var privates = { ddays: [], memo: '', pin: '', lastModified: 0, secretPwd: '', stickies: [] };
+  if (sheetPrivate && sheetPrivate.getLastRow() > 0) {
+    var pData = sheetPrivate.getRange(1, 1, 1, 2).getValues()[0];
+    if(pData[0] === 'PRIVATE_DATA') {
+      try {
+        var parsed = JSON.parse(pData[1]);
+        for (var key in parsed) { privates[key] = parsed[key]; }
+      } catch(e){}
+    }
+  }
+  return privates;
+}
+
+function safeOverwrite(sheet, data) {
+  if (!sheet || !data || data.length === 0) return;
+  var oldLastRow = Math.max(sheet.getLastRow(), 1);
+  var newLastRow = data.length;
+  sheet.getRange(1, 1, newLastRow, data[0].length).setValues(data);
+  if (oldLastRow > newLastRow) {
+    sheet.getRange(newLastRow + 1, 1, oldLastRow - newLastRow, sheet.getLastColumn()).clear();
+  }
+}
+
+function doPost(e) {
+  var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (err) { return output.setContent(JSON.stringify({ error: "LOCK_TIMEOUT" })); }
+
+  try {
+    var payload = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var storedPrivates = getPrivateData(ss);
+    
+    // 보안 PIN 검증
+    var requestPin = payload.pin || "";
+    if (storedPrivates.pin && storedPrivates.pin !== "" && storedPrivates.pin !== requestPin) {
+      return output.setContent(JSON.stringify({ error: "AUTH_FAILED" }));
+    }
+
+    // ▼▼▼ 구글 드라이브 이미지 다이렉트 업로드 처리 ▼▼▼
+    if (payload.action === 'galleryUpload') {
+      var uploadFolderId = payload.folderId || 'root';
+      var uFolder;
+      try {
+        uFolder = (uploadFolderId === 'root') ? DriveApp.getRootFolder() : DriveApp.getFolderById(uploadFolderId);
+      } catch(err) { uFolder = DriveApp.getRootFolder(); }
+      
+      // base64에서 메타데이터 꼬리 제거
+      var base64Data = payload.base64.indexOf(',') > -1 ? payload.base64.split(',')[1] : payload.base64;
+      var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), payload.mime, payload.name);
+      var newFile = uFolder.createFile(blob);
+
+      // 💡 배지 이미지 등 학생(타 구글계정)에게도 보여야 하는 파일은 '링크 공개'로 설정
+      if (payload.makePublic) {
+        try { newFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(shareErr) {}
+      }
+
+      return output.setContent(JSON.stringify({ success: true, id: newFile.getId() }));
+    }
+    // ▲▲▲ 구글 드라이브 이미지 다이렉트 업로드 처리 ▲▲▲
+
+    // 1. 할일 저장
+    if (payload.todos) {
+      var sheet = ss.getSheetByName('할일');
+      var data = [['분류', '내용', '완료여부', '중요도', '목표일', '고유ID']];
+      payload.todos.forEach(function(t) { data.push([t.type, t.text, t.done, t.pri, t.dueDate, t.id]); });
+      safeOverwrite(sheet, data);
+    }
+    // 2. 상담 저장
+    if (payload.counsels) {
+      var sheet = ss.getSheetByName('상담기록');
+      var data = [['분류', '이름', '내용', '날짜']];
+      payload.counsels.forEach(function(c) { data.push([c.type, c.name, c.memo, c.dateStr]); });
+      safeOverwrite(sheet, data);
+    }
+    // 3. 결석 저장
+    if (payload.absents) {
+      var sheet = ss.getSheetByName('결석조퇴');
+      var data = [['분류', '이름', '날짜']];
+      payload.absents.forEach(function(a) { data.push([a.type, a.name, a.dateStr]); });
+      safeOverwrite(sheet, data);
+    }
+    // 4. 일정 저장 (기간 정보 추가 버전)
+    if (payload.events) {
+      var sheet = ss.getSheetByName('일정');
+      var data = [['시작일', '일정내용', '색상', '종료일']]; // 💡 '종료일' 열 추가
+      Object.keys(payload.events).forEach(function(date) {
+        payload.events[date].forEach(function(ev) { 
+          if(typeof ev === 'object') {
+            data.push([date, ev.text, ev.color || '', ev.endDate || date]); // 💡 종료일 저장
+          } else {
+            data.push([date, ev, '', date]);
+          }
+        });
+      });
+      safeOverwrite(sheet, data);
+    }
+    // 5. 예산 저장
+    if (payload.budgetSettings && payload.budgetLogs) {
+      var sheet = ss.getSheetByName('예산');
+      var data = [['BUDGET_SETTINGS', JSON.stringify(payload.budgetSettings), '', ''], ['---', '---', '---', '---'], ['예산ID', '날짜', '내용', '금액']];
+      payload.budgetLogs.forEach(function(l) { data.push([l.id, l.dateStr, l.text, l.amount]); });
+      safeOverwrite(sheet, data);
+    }
+    // 6. 휴지통 저장 (중요!)
+    if (payload.trash) {
+      var sheet = ss.getSheetByName('휴지통');
+      if (!sheet) { sheet = ss.insertSheet('휴지통'); }
+      var data = [['삭제시간', '데이터타입', '원본데이터(JSON)']];
+      payload.trash.forEach(function(item) { data.push([item.deletedAt, item.type, JSON.stringify(item.data)]); });
+      safeOverwrite(sheet, data);
+    }
+
+// ▼▼▼ 새로 추가할 부분: 7. 빠른메모 저장 ▼▼▼
+    if (payload.stickies) {
+      var sheet = ss.getSheetByName('빠른메모');
+      if (!sheet) { sheet = ss.insertSheet('빠른메모'); }
+      var data = [['생성일', '메모내용', '색상']];
+      payload.stickies.forEach(function(s) { data.push([s.date, s.text, s.color || '']); });
+      safeOverwrite(sheet, data);
+    }
+    // ▲▲▲ 추가 완료 ▲▲▲
+
+    // 💡 8. 날씨 좌표를 weather 탭에 저장
+    if (payload.weatherLoc) {
+      var sheet = ss.getSheetByName('weather');
+      if (!sheet) { sheet = ss.insertSheet('weather'); }
+      var data = [['좌표값'], [payload.weatherLoc]];
+      safeOverwrite(sheet, data);
+    }
+
+    // 메타데이터 업데이트
+    var sheetPrivate = ss.getSheetByName('프라이빗');
+    var dataToSave = payload.privates || storedPrivates;
+    dataToSave.lastModified = new Date().getTime();
+    safeOverwrite(sheetPrivate, [['PRIVATE_DATA', JSON.stringify(dataToSave)]]);
+
+    return output.setContent(JSON.stringify({success: true, lastModified: dataToSave.lastModified}));
+  } catch(err) { return output.setContent(JSON.stringify({error: err.toString()})); }
+  finally { lock.releaseLock(); }
+}
+
+function doGet(e) {
+  var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
+  try {
+    
+    // 💡 [추가된 부분] 카카오 주소 검색 서버 우회 (CORS 403 에러 완벽 해결)
+    if (e.parameter && e.parameter.action === 'searchKakao') {
+      var query = e.parameter.query;
+      // 상세 주소 검색을 위해 address.json으로 변경
+      var url = "https://dapi.kakao.com/v2/local/search/address.json?query=" + encodeURIComponent(query);
+      var response = UrlFetchApp.fetch(url, {
+        "method": "get",
+        "headers": { "Authorization": "KakaoAK ba185a66f62d6c20fed885bd42188847" }, 
+        "muteHttpExceptions": true
+      });
+      return output.setContent(response.getContentText());
+    }
+    // 💡 [추가된 부분 끝]
+
+    // ▼▼▼ 구글 드라이브 미니 갤러리 데이터 호출 ▼▼▼
+    if (e.parameter && e.parameter.action === 'getGallery') {
+      // 보안 PIN 검증 (선택적) - 주석 해제됨!
+      var ssCheck = SpreadsheetApp.getActiveSpreadsheet();
+      var pCheck = getPrivateData(ssCheck);
+      if (pCheck.pin && pCheck.pin !== "" && e.parameter.pin !== pCheck.pin) {
+        return output.setContent(JSON.stringify({ error: "AUTH_FAILED" }));
+      }
+      
+      var fId = e.parameter.folderId || 'root';
+      var folder;
+      try {
+        folder = (fId === 'root') ? DriveApp.getRootFolder() : DriveApp.getFolderById(fId);
+      } catch(err) { folder = DriveApp.getRootFolder(); }
+      
+      var items = [];
+      // 1. 하위 폴더 검색
+      var foldersIter = folder.getFolders();
+      while(foldersIter.hasNext()) {
+        var f = foldersIter.next();
+        items.push({ type: 'folder', id: f.getId(), name: f.getName(), time: f.getLastUpdated().getTime() });
+      }
+      // 2. 이미지 파일 검색
+      var filesIter = folder.getFiles();
+      while(filesIter.hasNext()) {
+        var file = filesIter.next();
+        var mime = file.getMimeType();
+        if (mime.indexOf('image/') === 0) { // 이미지만 필터링
+          items.push({ 
+            type: 'image', 
+            id: file.getId(), 
+            name: file.getName(), 
+            time: file.getLastUpdated().getTime(), 
+           thumb: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400',
+           url: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1920' // 💡 모달용 고화질 해상도(w1920)로 수정!
+          });
+        }
+      }
+      // 최신순 정렬
+      items.sort(function(a, b) { return b.time - a.time; });
+      return output.setContent(JSON.stringify({ items: items, folderName: folder.getName() }));
+    }
+    // ▲▲▲ 구글 드라이브 미니 갤러리 데이터 호출 ▲▲▲
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var privates = getPrivateData(ss);
+    if (privates.pin && privates.pin !== "" && e.parameter.pin !== privates.pin) {
+       return output.setContent(JSON.stringify({ error: "AUTH_FAILED" }));
+    }
+
+    // 학생명부 시트 읽기 추가 (🚀 C열 비밀번호까지 읽어오도록 수정)
+    var studentList = [];
+    var sSheet = ss.getSheetByName('학생명부');
+    if (sSheet && sSheet.getLastRow() > 1) {
+      // getRange의 열 개수를 2에서 3으로 변경
+      var sData = sSheet.getRange(2, 1, sSheet.getLastRow()-1, 3).getValues();
+      sData.forEach(function(r) { 
+        // r[2]를 pwd(비밀번호) 속성으로 함께 묶어서 프론트로 보냅니다.
+        studentList.push({ no: r[0], name: r[1], pwd: String(r[2] || "") }); 
+      });
+    }
+
+    // 🚀 추가: 실시간 공휴일 데이터 가져오기 (올해 기준)
+    var currentYear = new Date().getFullYear();
+    var holidayData = {};
+    try {
+      holidayData = getKoreanHolidays(currentYear);
+    } catch(calErr) {
+      // 캘린더 권한이 아직 승인되지 않았을 때 서버가 뻗는 것을 방지
+      holidayData = {}; 
+    }
+
+   // 🚀 수정: 결과 객체에 holidays 필드 추가
+    var result = { 
+      students: studentList, 
+      todos: [], 
+      counsels: [], 
+      absents: [], 
+      events: {}, 
+      budgetSettings: [], 
+      budgetLogs: [], 
+      trash: [], 
+      privates: privates, 
+      stickies: [],
+      weatherLoc: "", // 💡 프론트로 보낼 날씨 좌표 공간 마련
+      holidays: holidayData // 이 줄이 추가되었습니다.
+    };
+
+    // 💡 누락되었던 sheets 객체 정의 (시트별 읽어올 열 개수)
+    var sheets = {'할일': 6, '상담기록': 4, '결석조퇴': 3, '일정': 4, '빠른메모': 3};
+
+    // 시트별 로드 로직 (반복문으로 최적화)
+    Object.keys(sheets).forEach(function(name) {
+      var s = ss.getSheetByName(name);
+      if (s && s.getLastRow() > 1) {
+        var data = s.getRange(2, 1, s.getLastRow()-1, sheets[name]).getValues();
+        if (name === '할일') data.forEach(function(r) { result.todos.push({type:r[0], text:r[1], done:(r[2]===true||r[2]==='true'), pri:r[3], dueDate:r[4], id:r[5]}); });
+        else if (name === '상담기록') data.forEach(function(r) { result.counsels.push({type:r[0], name:r[1], memo:r[2], dateStr:r[3]}); });
+        else if (name === '결석조퇴') data.forEach(function(r) { result.absents.push({type:r[0], name:r[1], dateStr:r[2]}); });
+        
+        // 💡 밖으로 튀어나가 있던 일정 코드를 제자리로 병합
+        else if (name === '일정') data.forEach(function(r) { 
+          if(!result.events[r[0]]) result.events[r[0]]=[]; 
+          result.events[r[0]].push({text: r[1], color: r[2], endDate: r[3] || r[0]}); 
+        });
+        
+        else if (name === '빠른메모') data.forEach(function(r) { result.stickies.push({date:r[0], text:r[1], color:r[2]}); });
+      }
+    });
+
+    // 휴지통 로드 및 15일 자동 삭제 로직 (💡 쓰기(Write) 작업은 doPost에서만 수행하도록 수정)
+    var trashSheet = ss.getSheetByName('휴지통');
+    if (trashSheet && trashSheet.getLastRow() > 1) {
+      var now = new Date().getTime();
+      var expireLimit = 15 * 24 * 60 * 60 * 1000;
+      var trashData = trashSheet.getRange(2, 1, trashSheet.getLastRow()-1, 3).getValues();
+      trashData.forEach(function(r) {
+        if (now - parseInt(r[0]) < expireLimit) {
+          result.trash.push({ deletedAt: r[0], type: r[1], data: JSON.parse(r[2]) });
+        }
+      });
+      // 💡 [수정] doGet에서의 safeOverwrite 로직을 삭제하여 동시 접속 시 충돌(Race Condition) 방지
+    }
+
+    // 예산 로드
+    var bSheet = ss.getSheetByName('예산');
+    if (bSheet && bSheet.getLastRow() > 0) {
+      var bData = bSheet.getDataRange().getValues();
+      if (bData[0][0] === 'BUDGET_SETTINGS') result.budgetSettings = JSON.parse(bData[0][1]);
+      for (var i = 3; i < bData.length; i++) {
+        if(bData[i][0]) result.budgetLogs.push({ id:String(bData[i][0]), dateStr:String(bData[i][1]), text:String(bData[i][2]), amount:parseInt(String(bData[i][3]).replace(/,/g,'')) || 0 });
+      }
+    }
+
+    // 💡 날씨 좌표(weather 탭) 로드
+    var wSheet = ss.getSheetByName('weather');
+    if (wSheet && wSheet.getLastRow() > 1) {
+      result.weatherLoc = wSheet.getRange(2, 1).getValue();
+    }
+
+    return output.setContent(JSON.stringify(result));
+  } catch (err) { return output.setContent(JSON.stringify({error: err.toString()})); }
+}
+
+
+/**
+ * 구글 캘린더에서 대한민국 공휴일(대체공휴일 포함) 명단을 가져오는 함수
+ * @param {number} year 가져올 연도
+ * @return {object} { "2024-05-06": "대체공휴일", ... } 형식의 객체
+ */
+function getKoreanHolidays(year) {
+  var holidays = {};
+  var calendarId = "ko.south_korea#holiday@group.v.calendar.google.com";
+  var calendar = CalendarApp.getCalendarById(calendarId);
+  
+  // 🚀 안전장치: 구글 휴일 캘린더를 못 불러왔을 경우 뻗지 않도록 방어
+  if (!calendar) return holidays; 
+  
+  var startDate = new Date(year, 0, 1);
+  var endDate = new Date(year, 11, 31);
+  var events = calendar.getEvents(startDate, endDate);
+  
+  events.forEach(function(event) {
+    var dateStr = Utilities.formatDate(event.getStartTime(), "GMT+9", "yyyy-MM-dd");
+    holidays[dateStr] = event.getTitle(); 
+  });
+  
+  return holidays;
+}
+
+
+function authTest() {
+      DriveApp.getRootFolder(); 
+      DriveApp.createFile('dummy.txt', 'dummy'); // 💡 강제로 파일 생성(쓰기) 권한을 요구하는 미끼 코드 추가!
+    }
