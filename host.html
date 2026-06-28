@@ -31,6 +31,9 @@
             <div><span>왕관</span><strong id="kingCountLabel">0명</strong></div>
             <div><span>만점</span><strong id="boardPerfectScoreLabel">0점</strong></div>
           </div>
+          <div style="display:flex; align-items:center;">
+            <button id="boardResetButton" class="danger-button" type="button" style="padding:0 24px;">새 게임 시작</button>
+          </div>
         </section>
 
         <section class="board-grid">
@@ -68,6 +71,15 @@
             <div class="setting-row">
               <label class="field compact-field"><span>왕의 자리 수</span><input id="kingLimitInput" type="number" min="1" max="20" value="3" /></label>
               <div class="setting-summary"><span>자동 만점</span><strong id="perfectScoreLabel">0점</strong></div>
+            </div>
+            <div class="setting-row" style="margin-top: 16px;">
+              <label class="field" style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+                <input id="allowDuplicateGamesInput" type="checkbox" style="width:24px; height:24px; cursor:pointer;" checked />
+                <span style="font-size:16px; color:#172033;">게임 중복 승리 허용</span>
+              </label>
+              <div class="guide-box small" style="margin-top:0;">
+                <p>체크 해제 시, 한 종목에서 한 번만 점수를 획득할 수 있습니다.</p>
+              </div>
             </div>
             <div class="button-row">
               <button id="saveSettingsButton" class="primary-button" type="button">설정 저장</button>

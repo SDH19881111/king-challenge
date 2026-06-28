@@ -1,3 +1,5 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 const roomId = new URLSearchParams(window.location.search).get("room") || "class-3-2";
 const firebaseConfig = {
   apiKey: "AIzaSyBzKPMuRx87I-TvUZugsNSkPPVSu0Yks6g",
@@ -218,16 +220,22 @@ async function handleMatchResult(winnerId) {
 
   if (matchType === "challenge") {
     if (winner.status === "king") {
-      // 왕 승리: 도전자 점수를 총 게임 종목 수로 강등
       loser.score = totalGamesCount;
     } else {
-      // 도전자 승리: 왕 점수 강등 및 왕관 박탈, 도전자가 즉시 왕으로 승격
       loser.score = Math.round(totalGamesCount / 2);
       loser.status = "normal"; 
       winner.reachedPerfectAt = (loser.reachedPerfectAt || Date.now()) - 1; 
     }
   } else {
-    // 일반 대결
+    const allowDup = state.settings.allowDuplicateGames ?? true;
+    if (!allowDup) {
+      if (winner.playedGames && winner.playedGames.includes(selectedGame.id)) {
+        alert(winner.name + " 학생은 이미 '" + selectedGame.name + "' 종목에서 승리한 적이 있습니다.\n중복 승리가 금지되어 있어 점수를 얻을 수 없습니다.");
+        return;
+      }
+      winner.playedGames = winner.playedGames || [];
+      winner.playedGames.push(selectedGame.id);
+    }
     winner.score += 2;
     loser.score = Math.max(0, loser.score - 1);
     if (winner.score >= state.settings.perfectScore && !winner.reachedPerfectAt) {
@@ -258,15 +266,11 @@ els.playerBBtn.onclick = () => handleMatchResult(selectedPlayers[1].id);
 
 async function setupFirebase(){
   if(!firebaseConfig.apiKey || !firebaseConfig.databaseURL) return false;
-  const [appModule, databaseModule] = await Promise.all([
-    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js")
-  ]);
-  const app = appModule.initializeApp(firebaseConfig);
-  const database = databaseModule.getDatabase(app);
-  databaseApi = databaseModule;
-  databaseRef = databaseModule.ref(database, "rooms/" + roomId);
-  unsubscribe = databaseModule.onValue(databaseRef, snapshot => {
+  const app = initializeApp(firebaseConfig);
+  const database = getDatabase(app);
+  databaseApi = { set };
+  databaseRef = ref(database, "rooms/" + roomId);
+  unsubscribe = onValue(databaseRef, snapshot => {
     const value = snapshot.val();
     if(value){ state = value; render(); }
   });
