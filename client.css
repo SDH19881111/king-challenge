@@ -89,6 +89,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .vs-card:hover .action-text { opacity: 1; }
 .vs-divider { text-align: center; font-size: 24px; font-weight: 900; color: #94a3b8; font-style: italic; }
 
+.confirm-overlay { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(23,32,51,0.55); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.confirm-overlay.active { display: flex; animation: fadeIn 0.2s ease; }
+.confirm-card { width: 100%; max-width: 520px; padding: 28px 24px; border-radius: 20px; background: #fff; box-shadow: var(--shadow); text-align: center; }
+.confirm-eyebrow { display: inline-block; margin: 0 0 12px; padding: 6px 14px; border-radius: 999px; background: var(--gold-soft); color: #7a5a00; font-size: 14px; font-weight: 900; }
+.confirm-text { margin: 0 0 24px; font-size: 24px; font-weight: 900; line-height: 1.4; color: var(--ink); }
+.confirm-text strong { color: var(--aqua); font-size: 28px; }
+.confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.confirm-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 20px 12px; border-radius: 16px; font-size: 20px; font-weight: 900; border: 3px solid transparent; }
+.confirm-btn small { font-size: 13px; font-weight: 800; opacity: 0.85; }
+.confirm-emoji { font-size: 30px; line-height: 1; }
+.confirm-btn.no { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.confirm-btn.no:active { background: #e2e8f0; }
+.confirm-btn.yes { background: linear-gradient(135deg, #00a9a5, #00bfae); color: #fff; box-shadow: 0 10px 20px rgba(0,169,165,0.3); }
+.confirm-btn.yes:disabled { opacity: 0.45; box-shadow: none; }
+
 .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
 .loading-overlay.active { display: flex; }
 .spinner { width: 40px; height: 40px; border: 4px solid var(--line); border-top-color: var(--aqua); border-radius: 50%; animation: spin 1s linear infinite; }

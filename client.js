@@ -18,10 +18,14 @@ let databaseRef = null;
 let unsubscribe = null;
 let state = null; 
 
-let currentStep = "game-select"; 
-let matchType = "normal"; 
+let currentStep = "game-select";
+let matchType = "normal";
 let selectedGame = null;
-let selectedPlayers = []; 
+let selectedPlayers = [];
+
+// 결전(왕↔도전자)에서 진 사람의 점수 후퇴 폭. 게임 수와 무관한 고정값(=일반 승리 1회분).
+// 진 사람은 "만점 바로 아래"로만 내려가서, 한 번만 다시 이기면 재도전할 수 있다.
+const CHALLENGE_SETBACK = 2;
 
 const els = {
   roomLabel: document.querySelector("#roomLabel"),
@@ -45,6 +49,10 @@ const els = {
   playerAStatus: document.querySelector("#playerAStatus"),
   playerBStatus: document.querySelector("#playerBStatus"),
   backToPlayerBtn: document.querySelector("#backToPlayerBtn"),
+  confirmOverlay: document.querySelector("#confirmOverlay"),
+  confirmWinnerName: document.querySelector("#confirmWinnerName"),
+  confirmYesBtn: document.querySelector("#confirmYesBtn"),
+  confirmNoBtn: document.querySelector("#confirmNoBtn"),
 };
 
 els.roomLabel.textContent = roomId;
@@ -220,13 +228,19 @@ async function handleMatchResult(winnerId) {
   let repeatWin = false;
 
   if (matchType === "challenge") {
-    if (winner.status === "king") {
-      loser.score = totalGamesCount;
-    } else {
-      loser.score = Math.round(totalGamesCount / 2);
-      loser.status = "normal"; 
-      winner.reachedPerfectAt = (loser.reachedPerfectAt || Date.now()) - 1; 
-    }
+    // 결전은 왕·도전자 모두 같은 로직. 진 사람은 게임 수와 상관없이 만점 바로 아래로만 후퇴한다.
+    const perfect = state.settings.perfectScore;
+    loser.score = Math.max(0, perfect - CHALLENGE_SETBACK);
+    loser.status = "normal";
+    loser.reachedPerfectAt = null;
+    loser.crownOrder = null;
+    loser.challengerOrder = null;
+    // 이긴 사람이 확실히 왕좌를 차지하도록: 만점 유지 + 왕좌 진입 시각을 가장 앞으로 당긴다.
+    if (winner.score < perfect) winner.score = perfect;
+    const times = Object.values(state.students)
+      .map(function(s){ return s.reachedPerfectAt || Infinity; })
+      .concat(Date.now());
+    winner.reachedPerfectAt = Math.min.apply(null, times) - 1;
   } else {
     const allowDup = state.settings.allowDuplicateGames ?? true;
     let gainPoints = 2;
@@ -242,7 +256,7 @@ async function handleMatchResult(winnerId) {
       }
     }
     winner.score += gainPoints;
-    loser.score = Math.max(0, loser.score - 1);
+    // 일반 대결: 진 사람은 점수 변화 없음(+0).
     if (winner.score >= state.settings.perfectScore && !winner.reachedPerfectAt) {
       winner.reachedPerfectAt = Date.now();
     }
@@ -264,10 +278,29 @@ els.normalMatchBtn.onclick = () => { matchType = "normal"; selectedPlayers=[]; p
 els.challengeMatchBtn.onclick = () => { matchType = "challenge"; selectedPlayers=[]; playSound("click"); render(); };
 els.backToGameBtn.onclick = () => { currentStep = "game-select"; playSound("click"); render(); };
 els.nextToResultBtn.onclick = () => { currentStep = "result-input"; playSound("click"); render(); };
-els.backToPlayerBtn.onclick = () => { currentStep = "player-select"; playSound("click"); render(); };
+els.backToPlayerBtn.onclick = () => { closeConfirm(); currentStep = "player-select"; playSound("click"); render(); };
 
-els.playerABtn.onclick = () => handleMatchResult(selectedPlayers[0].id);
-els.playerBBtn.onclick = () => handleMatchResult(selectedPlayers[1].id);
+// 승자 탭 → 곧바로 반영하지 않고 "OOO가 이긴 것으로 기록할까요?" 한 번 더 확인.
+let pendingWinnerId = null;
+function openConfirm(winnerId){
+  const w = state.students[winnerId];
+  if(!w) return;
+  pendingWinnerId = winnerId;
+  els.confirmWinnerName.textContent = w.name;
+  els.confirmOverlay.classList.add("active");
+  // 직전 탭이 그대로 "네"에 닿아 실수로 확정되는 것을 막기 위해 잠깐 비활성화.
+  els.confirmYesBtn.disabled = true;
+  setTimeout(function(){ els.confirmYesBtn.disabled = false; }, 600);
+  playSound("click");
+}
+function closeConfirm(){
+  els.confirmOverlay.classList.remove("active");
+  pendingWinnerId = null;
+}
+els.playerABtn.onclick = () => openConfirm(selectedPlayers[0].id);
+els.playerBBtn.onclick = () => openConfirm(selectedPlayers[1].id);
+els.confirmYesBtn.onclick = () => { const id = pendingWinnerId; closeConfirm(); if(id) handleMatchResult(id); };
+els.confirmNoBtn.onclick = () => { closeConfirm(); playSound("click"); };
 
 function normalizeState(value){
   const source = value || {};
