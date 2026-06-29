@@ -224,9 +224,6 @@ async function handleMatchResult(winnerId) {
   const winner = state.students[winnerId];
   const loserId = selectedPlayers.find(p => p.id !== winnerId).id;
   const loser = state.students[loserId];
-  const totalGamesCount = state.settings.games.length;
-  let repeatWin = false;
-
   if (matchType === "challenge") {
     // 결전은 왕·도전자 모두 같은 로직. 진 사람은 게임 수와 상관없이 만점 바로 아래로만 후퇴한다.
     const perfect = state.settings.perfectScore;
@@ -242,21 +239,8 @@ async function handleMatchResult(winnerId) {
       .concat(Date.now());
     winner.reachedPerfectAt = Math.min.apply(null, times) - 1;
   } else {
-    const allowDup = state.settings.allowDuplicateGames ?? true;
-    let gainPoints = 2;
-    if (!allowDup) {
-      winner.playedGames = winner.playedGames || [];
-      if (winner.playedGames.includes(selectedGame.id)) {
-        // 이미 이긴 종목 재승리: 차단하지 않고 절반 점수(+1)만 부여.
-        // 진 학생도 점수를 계속 모아 도전자로 올라갈 수 있게 하기 위함.
-        gainPoints = 1;
-        repeatWin = true;
-      } else {
-        winner.playedGames.push(selectedGame.id);
-      }
-    }
-    winner.score += gainPoints;
-    // 일반 대결: 진 사람은 점수 변화 없음(+0).
+    // 일반 대결: 이기면 +2, 지면 +0(진 사람 점수 변화 없음).
+    winner.score += 2;
     if (winner.score >= state.settings.perfectScore && !winner.reachedPerfectAt) {
       winner.reachedPerfectAt = Date.now();
     }
@@ -268,7 +252,7 @@ async function handleMatchResult(winnerId) {
   await saveState();
   playSound("win");
   
-  alert(`${winner.name} 학생의 승리가 기록되었습니다!` + (repeatWin ? `\n(이미 이긴 '${selectedGame.name}' 종목이라 1점만 올라갔어요.)` : ""));
+  alert(`${winner.name} 학생의 승리가 기록되었습니다!`);
   currentStep = "game-select";
   selectedPlayers = [];
   render();
@@ -306,7 +290,7 @@ function normalizeState(value){
   const source = value || {};
   return {
     settings: Object.assign(
-      { roomName: "왕좌 도전", games: [], kingLimit: 3, perfectScore: 0, sheetUrl: "", status: "playing", allowDuplicateGames: true, updatedAt: 0 },
+      { roomName: "왕좌 도전", games: [], kingLimit: 3, perfectScore: 0, sheetUrl: "", status: "playing", updatedAt: 0 },
       source.settings || {}
     ),
     students: source.students || {}
